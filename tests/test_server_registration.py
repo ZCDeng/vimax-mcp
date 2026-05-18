@@ -8,7 +8,7 @@ back into server.py.
 from vimax_mcp.server import mcp
 
 
-def test_five_tools_registered():
+def test_six_tools_registered():
     tools = mcp._tool_manager.list_tools()
     names = {t.name for t in tools}
     assert names == {
@@ -17,6 +17,7 @@ def test_five_tools_registered():
         "get_job_status",
         "list_artifacts",
         "cancel_job",
+        "get_quota",
     }
 
 

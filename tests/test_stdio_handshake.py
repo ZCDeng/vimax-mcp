@@ -30,6 +30,7 @@ async def test_list_tools_via_stdio():
                 "get_job_status",
                 "list_artifacts",
                 "cancel_job",
+                "get_quota",
             }
 
 
@@ -52,3 +53,24 @@ async def test_get_status_missing_job_via_stdio():
             payload = json.loads(res.content[0].text)
             assert "error" in payload
             assert "not found" in payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_quota_via_stdio():
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "vimax_mcp.server"],
+    )
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            res = await session.call_tool("get_quota", {})
+            assert not res.isError
+            import json
+
+            payload = json.loads(res.content[0].text)
+            assert "date" in payload
+            for provider in ("chat", "image", "video"):
+                assert provider in payload
+                assert "used_today" in payload[provider]
+                assert "limit" in payload[provider]
