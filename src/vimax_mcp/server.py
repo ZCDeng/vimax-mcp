@@ -22,6 +22,7 @@ from typing import Any, Optional
 from mcp.server.fastmcp import FastMCP
 
 from . import artifacts as artifacts_mod
+from .dotenv import maybe_load_vimax_env
 from .jobs import JobRegistry, default_jobs_root
 from .quota import (
     QuotaExhausted,
@@ -278,6 +279,9 @@ def main() -> None:
         level=os.environ.get("VIMAX_MCP_LOG", "INFO"),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+    loaded = maybe_load_vimax_env()
+    if loaded:
+        logger.info("loaded env from %s", loaded)
     _ctx_or_die()
 
     if args.transport == "stdio":

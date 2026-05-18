@@ -1,0 +1,23 @@
+# Append to ~/.codex/config.toml.
+#
+# Codex's stable releases didn't speak SSE last time we checked, so we
+# spawn a tiny stdio-to-SSE bridge instead. The bridge is just
+# `vimax_mcp.server` run with --transport stdio against a fresh
+# ServerContext — fine for transient use, but the canonical
+# state (jobs, quota) lives in the SSE instance.
+#
+# If your Codex build does support remote MCP, replace this block with:
+#   [mcp_servers.vimax]
+#   transport = "sse"
+#   url = "http://127.0.0.1:7801/sse"
+
+[mcp_servers.vimax]
+command = "uv"
+args = [
+  "run",
+  "--directory",
+  "/Users/zcdeng/projects/vimax-mcp",
+  "python",
+  "-m",
+  "vimax_mcp.server",
+]

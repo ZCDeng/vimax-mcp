@@ -6,8 +6,8 @@ Implements proposal §1 of `~/projects/ViMax/docs/MCP_PROPOSAL.md`.
 
 ## Status
 
-Steps 1-2 done: 6 tools, stdio + SSE transports, daily-quota gate.
-launchd integration and multi-CLI wiring come in step 3.
+Steps 1-3 done: 6 tools, stdio + SSE transports, daily-quota gate,
+launchd agent template, multi-CLI configuration snippets.
 
 ## Tools
 
@@ -81,6 +81,38 @@ uv run python -m vimax_mcp.server --transport sse --port 7801
 | `VIMAX_MCP_LOG` | `INFO` | Log level |
 | `MINIMAX_API_KEY` | — | Forwarded to ViMax chat model |
 | `GOOGLE_API_KEY` | — | Forwarded to ViMax image/video generators |
+
+## Deploy as a launchd agent (recommended on macOS)
+
+```bash
+./scripts/install-launchd.sh         # install or refresh
+./scripts/install-launchd.sh status  # show launchctl print + log tails
+./scripts/install-launchd.sh remove  # uninstall
+```
+
+The template at `launchd/com.zcdeng.vimax-mcp.plist` is rendered into
+`~/Library/LaunchAgents/com.zcdeng.vimax-mcp.plist` with your `$HOME`
+and absolute `uv` path substituted. The agent runs `vimax-mcp
+--transport sse --port 7801` and restarts on crash.
+
+Secrets are not stored in the plist. The server loads
+`$VIMAX_HOME/.env` on boot (see `vimax_mcp/dotenv.py`).
+
+Verify:
+
+```bash
+curl -sI http://127.0.0.1:7801/sse | head -1   # → 200 OK
+tail -f ~/projects/ViMax/.working_dir/logs/mcp.{out,err}.log
+```
+
+## Wire into your CLI clients
+
+Ready-to-copy snippets live in `clients/`:
+
+| File | Target |
+|---|---|
+| `clients/claude-code.mcp.json` | `~/.claude/.mcp.json` or project `.mcp.json` — works for every Claude Code-compatible CLI (Claude Code, the 6 forks, Gemini/Kimi via the symlink trick). |
+| `clients/codex.config.toml` | Append to `~/.codex/config.toml`. Codex stable does not speak SSE; the snippet spawns a stdio subprocess instead. |
 
 ## Tests
 

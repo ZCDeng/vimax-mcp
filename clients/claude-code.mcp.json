@@ -1,0 +1,9 @@
+{
+  "//": "Drop into ~/.claude/.mcp.json (global) or project's .mcp.json. Picks the SSE instance the launchd agent runs at 127.0.0.1:7801. If the agent is down, all clients will see the connection fail — that's intended, since there is one canonical instance for shared quota state.",
+  "mcpServers": {
+    "vimax": {
+      "transport": "sse",
+      "url": "http://127.0.0.1:7801/sse"
+    }
+  }
+}

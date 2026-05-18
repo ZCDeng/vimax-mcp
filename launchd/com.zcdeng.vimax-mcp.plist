@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  vimax-mcp launchd agent template.
+
+  This template uses __USER_HOME__ and __UV_PATH__ as placeholders that
+  scripts/install-launchd.sh substitutes before installing. The installed
+  plist lives at ~/Library/LaunchAgents/com.zcdeng.vimax-mcp.plist.
+
+  Secrets (MINIMAX_API_KEY, GOOGLE_API_KEY) are NOT stored in the plist.
+  The server loads them from $VIMAX_HOME/.env at startup (see dotenv.py).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zcdeng.vimax-mcp</string>
+
+  <key>WorkingDirectory</key>
+  <string>__USER_HOME__/projects/vimax-mcp</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__UV_PATH__</string>
+    <string>run</string>
+    <string>python</string>
+    <string>-m</string>
+    <string>vimax_mcp.server</string>
+    <string>--transport</string>
+    <string>sse</string>
+    <string>--host</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>7801</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__USER_HOME__</string>
+    <key>PATH</key>
+    <string>__USER_HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>VIMAX_HOME</key>
+    <string>__USER_HOME__/projects/ViMax</string>
+    <key>VIMAX_JOBS_DIR</key>
+    <string>__USER_HOME__/projects/ViMax/.working_dir/jobs</string>
+    <key>VIMAX_QUOTA_FILE</key>
+    <string>__USER_HOME__/projects/ViMax/.working_dir/quota.json</string>
+    <key>VIMAX_MCP_LOG</key>
+    <string>INFO</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>__USER_HOME__/projects/ViMax/.working_dir/logs/mcp.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__USER_HOME__/projects/ViMax/.working_dir/logs/mcp.err.log</string>
+</dict>
+</plist>
