@@ -1,0 +1,28 @@
+[project]
+name = "vimax-mcp"
+version = "0.1.0"
+description = "MCP server wrapping ViMax (HKUDS) for use across CLI clients"
+authors = [{ email = "zhic.deng@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.2.0",
+    "pydantic>=2.0",
+    "anyio>=4.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+vimax-mcp = "vimax_mcp.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.7,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
