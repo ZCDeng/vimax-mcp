@@ -231,6 +231,25 @@ def _render_human(body: Any, color: bool, stream) -> None:
             print(f"job_id: {body['job_id']}", file=stream)
         return
 
+    # List jobs response
+    if "jobs" in body and isinstance(body["jobs"], list):
+        jobs = body["jobs"]
+        if not jobs:
+            print("(no jobs)", file=stream)
+            return
+        for j in jobs:
+            st = j["state"]
+            print(
+                f"  {j['job_id']}  "
+                f"{_color(st, _state_color(st), enabled=color):<24} "
+                f"{j['kind']:<13} "
+                f"{j['submitted_at']}",
+                file=stream,
+            )
+            if j.get("summary"):
+                print(f"      {_color(j['summary'], 'dim', enabled=color)}", file=stream)
+        return
+
     # Artifacts
     if "artifacts" in body:
         arts = body["artifacts"]
@@ -276,6 +295,21 @@ def _cmd_health(args) -> int:
 
 def _cmd_quota(args) -> int:
     r = _request("GET", f"{args.server}/api/v1/quota", timeout=args.timeout)
+    return _print_response(r, args.json)
+
+
+def _cmd_list(args) -> int:
+    params: dict[str, Any] = {"limit": args.limit}
+    if args.kind:
+        params["kind"] = args.kind
+    if args.state:
+        params["state"] = args.state
+    r = _request(
+        "GET",
+        f"{args.server}/api/v1/jobs",
+        params=params,
+        timeout=args.timeout,
+    )
     return _print_response(r, args.json)
 
 
@@ -376,6 +410,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_quota = sub.add_parser("quota", help="Show today's per-provider usage.")
     p_quota.set_defaults(func=_cmd_quota)
+
+    p_list = sub.add_parser("list", help="List recent jobs (newest first).")
+    p_list.add_argument("--limit", type=int, default=20, help="Max jobs to return (1-500).")
+    p_list.add_argument(
+        "--kind",
+        choices=("idea2video", "script2video"),
+        default=None,
+        help="Filter by job kind.",
+    )
+    p_list.add_argument(
+        "--state",
+        choices=("queued", "running", "paused_rate_limit", "done", "failed", "cancelled"),
+        default=None,
+        help="Filter by job state.",
+    )
+    p_list.set_defaults(func=_cmd_list)
 
     p_status = sub.add_parser("status", help="Get job state + progress.")
     p_status.add_argument("job_id")

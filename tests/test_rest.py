@@ -168,6 +168,56 @@ def test_cancel_already_done_job(client: TestClient, ctx: FakeCtx):
     assert "already done" in body["reason"]
 
 
+def test_list_jobs_empty(client: TestClient):
+    resp = client.get("/api/v1/jobs")
+    assert resp.status_code == 200
+    assert resp.json() == {"jobs": []}
+
+
+def test_list_jobs_returns_summaries(client: TestClient, ctx: FakeCtx):
+    s1 = client.post("/api/v1/jobs/idea2video", json={"idea": "first idea"}).json()
+    s2 = client.post(
+        "/api/v1/jobs/script2video", json={"script": "FADE IN: something"}
+    ).json()
+    resp = client.get("/api/v1/jobs")
+    assert resp.status_code == 200
+    jobs = resp.json()["jobs"]
+    assert len(jobs) == 2
+    by_id = {j["job_id"]: j for j in jobs}
+    assert by_id[s1["job_id"]]["summary"] == "first idea"
+    assert by_id[s2["job_id"]]["summary"] == "FADE IN: something"
+    assert by_id[s1["job_id"]]["kind"] == "idea2video"
+
+
+def test_list_jobs_filters(client: TestClient, ctx: FakeCtx):
+    s_idea = client.post("/api/v1/jobs/idea2video", json={"idea": "i"}).json()
+    s_scr = client.post("/api/v1/jobs/script2video", json={"script": "s"}).json()
+    only_script = client.get("/api/v1/jobs?kind=script2video").json()["jobs"]
+    assert [j["job_id"] for j in only_script] == [s_scr["job_id"]]
+    # state filter — both are queued, so state=done returns empty
+    only_done = client.get("/api/v1/jobs?state=done").json()["jobs"]
+    assert only_done == []
+
+
+def test_list_jobs_bad_limit(client: TestClient):
+    assert client.get("/api/v1/jobs?limit=0").status_code == 400
+    assert client.get("/api/v1/jobs?limit=abc").status_code == 400
+    assert client.get("/api/v1/jobs?limit=9999").status_code == 400
+
+
+def test_list_jobs_bad_filters(client: TestClient):
+    assert client.get("/api/v1/jobs?kind=bogus").status_code == 400
+    assert client.get("/api/v1/jobs?state=zzz").status_code == 400
+
+
+def test_list_jobs_truncates_long_source(client: TestClient, ctx: FakeCtx):
+    long_idea = "x" * 200
+    client.post("/api/v1/jobs/idea2video", json={"idea": long_idea}).json()
+    job = client.get("/api/v1/jobs").json()["jobs"][0]
+    assert len(job["summary"]) <= 81  # 80 + ellipsis char
+    assert job["summary"].endswith("…")
+
+
 def test_get_quota_returns_snapshot(client: TestClient):
     resp = client.get("/api/v1/quota")
     assert resp.status_code == 200

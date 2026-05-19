@@ -164,6 +164,68 @@ def test_submit_script_reads_at_file(monkeypatch, tmp_path: Path):
     assert captured["body"]["script"] == "FADE IN: ..."
 
 
+def test_list_human_output(monkeypatch):
+    def h(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/api/v1/jobs"
+        return httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "job_id": "J1",
+                        "kind": "idea2video",
+                        "state": "running",
+                        "submitted_at": "2026-05-19T00:00:00+00:00",
+                        "updated_at": "2026-05-19T00:01:00+00:00",
+                        "summary": "a cat on a roof",
+                        "final_video": None,
+                    },
+                    {
+                        "job_id": "J2",
+                        "kind": "script2video",
+                        "state": "done",
+                        "submitted_at": "2026-05-18T00:00:00+00:00",
+                        "updated_at": "2026-05-18T00:30:00+00:00",
+                        "summary": "FADE IN: something",
+                        "final_video": "/tmp/J2/final.mp4",
+                    },
+                ]
+            },
+        )
+
+    code, out, err = _run(["list"], monkeypatch=monkeypatch, handler=h)
+    assert code == 0
+    assert "J1" in out and "J2" in out
+    assert "running" in out and "done" in out
+    assert "a cat on a roof" in out
+    assert "FADE IN" in out
+
+
+def test_list_empty_output(monkeypatch):
+    def h(req):
+        return httpx.Response(200, json={"jobs": []})
+
+    code, out, err = _run(["list"], monkeypatch=monkeypatch, handler=h)
+    assert code == 0
+    assert "no jobs" in out
+
+
+def test_list_forwards_filters(monkeypatch):
+    captured = {}
+
+    def h(req: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(req.url.params)
+        return httpx.Response(200, json={"jobs": []})
+
+    code, out, err = _run(
+        ["list", "--limit", "5", "--kind", "script2video", "--state", "done"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    assert code == 0
+    assert captured["params"] == {"limit": "5", "kind": "script2video", "state": "done"}
+
+
 def test_status_human_output(monkeypatch):
     def h(req: httpx.Request) -> httpx.Response:
         return httpx.Response(

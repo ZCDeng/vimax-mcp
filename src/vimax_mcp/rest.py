@@ -148,6 +148,54 @@ async def _h_submit_script2video(ctx, request: Request) -> JSONResponse:
     return JSONResponse({"job_id": job.id, "working_dir": job.working_dir, "state": job.state})
 
 
+_LIST_SUMMARY_LEN = 80
+
+
+def _job_summary(job) -> dict:
+    """Compact view of a job for the list endpoint.
+
+    Truncate the source text (idea / script) so the response stays small
+    even when callers list dozens of jobs.
+    """
+    source = job.inputs.get("idea") or job.inputs.get("script") or ""
+    if len(source) > _LIST_SUMMARY_LEN:
+        source = source[: _LIST_SUMMARY_LEN - 1] + "…"
+    return {
+        "job_id": job.id,
+        "kind": job.kind,
+        "state": job.state,
+        "submitted_at": job.submitted_at,
+        "updated_at": job.updated_at,
+        "summary": source,
+        "final_video": job.final_video,
+    }
+
+
+async def _h_list_jobs(ctx, request: Request) -> JSONResponse:
+    try:
+        limit = int(request.query_params.get("limit", "20"))
+    except ValueError:
+        raise _BadRequest("limit must be an integer")
+    if limit < 1 or limit > 500:
+        raise _BadRequest("limit must be between 1 and 500")
+    kind = request.query_params.get("kind")
+    if kind is not None and kind not in ("idea2video", "script2video"):
+        raise _BadRequest(f"invalid kind: {kind}")
+    state = request.query_params.get("state")
+    valid_states = (
+        "queued",
+        "running",
+        "paused_rate_limit",
+        "done",
+        "failed",
+        "cancelled",
+    )
+    if state is not None and state not in valid_states:
+        raise _BadRequest(f"invalid state: {state}")
+    jobs = ctx.registry.list_jobs(limit=limit, kind=kind, state=state)
+    return JSONResponse({"jobs": [_job_summary(j) for j in jobs]})
+
+
 async def _h_get_job_status(ctx, request: Request) -> JSONResponse:
     job_id = request.path_params["job_id"]
     try:
@@ -229,6 +277,11 @@ def build_app(ctx) -> Starlette:
             "/jobs/script2video",
             _wrap_endpoint(ctx, _h_submit_script2video),
             methods=["POST"],
+        ),
+        Route(
+            "/jobs",
+            _wrap_endpoint(ctx, _h_list_jobs),
+            methods=["GET"],
         ),
         Route(
             "/jobs/{job_id}",
