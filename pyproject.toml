@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 vimax-mcp = "vimax_mcp.server:main"
+vimax = "vimax_mcp.cli:main"
 
 [dependency-groups]
 dev = [
