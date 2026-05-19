@@ -1,9 +1,18 @@
 {
-  "//": "Drop into ~/.claude/.mcp.json (global) or project's .mcp.json. Picks the SSE instance the launchd agent runs at 127.0.0.1:7801. If the agent is down, all clients will see the connection fail — that's intended, since there is one canonical instance for shared quota state.",
+  "//": [
+    "OPT-IN ONLY. The recommended path is the `vimax` CLI authorized via",
+    "clients/claude-code.settings.json (Bash permission). Use this MCP block",
+    "only when an agent host can't shell out to a CLI but does speak MCP.",
+    "",
+    "Drop into ~/.claude/.mcp.json (global) or a project's .mcp.json. Points",
+    "at the SSE instance the launchd agent serves under /mcp/sse (note the",
+    "new path: pre-U2 deployments used /sse at the root). Shared quota and",
+    "job registry are guaranteed only when all clients share this single URL."
+  ],
   "mcpServers": {
     "vimax": {
       "transport": "sse",
-      "url": "http://127.0.0.1:7801/sse"
+      "url": "http://127.0.0.1:7801/mcp/sse"
     }
   }
 }
