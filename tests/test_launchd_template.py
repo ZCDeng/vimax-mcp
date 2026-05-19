@@ -40,7 +40,11 @@ def test_template_parses_as_plist(tmp_path: Path):
     assert data["Label"] == "com.zcdeng.vimax-mcp"
     assert data["ProgramArguments"][0] == "/Users/example/.local/bin/uv"
     assert "--transport" in data["ProgramArguments"]
-    assert "sse" in data["ProgramArguments"]
+    # post-U2: composite REST + MCP SSE (was 'sse' alone before).
+    assert "both" in data["ProgramArguments"]
+    assert "sse" not in data["ProgramArguments"], (
+        "legacy --transport sse should be replaced by 'both' (U6)"
+    )
     assert "7801" in data["ProgramArguments"]
     assert data["RunAtLoad"] is True
     assert data["KeepAlive"]["Crashed"] is True

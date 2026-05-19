@@ -26,7 +26,7 @@
     <string>-m</string>
     <string>vimax_mcp.server</string>
     <string>--transport</string>
-    <string>sse</string>
+    <string>both</string>
     <string>--host</string>
     <string>127.0.0.1</string>
     <string>--port</string>
