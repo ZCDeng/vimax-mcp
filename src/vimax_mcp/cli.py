@@ -20,9 +20,13 @@ import argparse
 import json
 import os
 import sys
+import time
 from typing import Any, Optional
 
 import httpx
+
+_TERMINAL_STATES = {"done", "failed", "cancelled"}
+_WATCH_DEFAULT_INTERVAL = 5.0
 
 DEFAULT_SERVER = os.environ.get("VIMAX_SERVER", "http://127.0.0.1:7801")
 DEFAULT_TIMEOUT = float(os.environ.get("VIMAX_CLI_TIMEOUT", "30"))
@@ -314,12 +318,44 @@ def _cmd_list(args) -> int:
 
 
 def _cmd_status(args) -> int:
-    r = _request(
-        "GET",
-        f"{args.server}/api/v1/jobs/{args.job_id}",
-        timeout=args.timeout,
-    )
-    return _print_response(r, args.json)
+    url = f"{args.server}/api/v1/jobs/{args.job_id}"
+    if not args.watch:
+        r = _request("GET", url, timeout=args.timeout)
+        return _print_response(r, args.json)
+
+    interval = float(args.watch)
+    if interval < 0.05:
+        _die("watch interval must be >= 0.05 seconds", EXIT_INPUT)
+    last_state: Optional[str] = None
+    try:
+        while True:
+            r = _request("GET", url, timeout=args.timeout)
+            # Bail immediately on HTTP errors (404 wrong job_id, 5xx daemon
+            # outage, etc.) — there's nothing to wait for.
+            if r.status_code >= 400:
+                return _print_response(r, args.json)
+            body = r.json()
+            current = body.get("state")
+            # In --json mode print one JSON line per poll (NDJSON) so the
+            # consumer can stream `| jq`. In human mode reprint only when
+            # state changes to keep the terminal quiet.
+            if args.json:
+                print(json.dumps(body, ensure_ascii=False))
+                sys.stdout.flush()
+            elif current != last_state:
+                _print_response(r, json_mode=False)
+                print(
+                    f"  (polling every {interval:g}s, ^C to stop)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            last_state = current
+            if current in _TERMINAL_STATES:
+                return EXIT_CLIENT_ERROR if current == "failed" else EXIT_OK
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("vimax: watch interrupted", file=sys.stderr)
+        return EXIT_OK
 
 
 def _cmd_artifacts(args) -> int:
@@ -429,6 +465,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="Get job state + progress.")
     p_status.add_argument("job_id")
+    p_status.add_argument(
+        "--watch",
+        nargs="?",
+        type=float,
+        const=_WATCH_DEFAULT_INTERVAL,
+        default=None,
+        metavar="INTERVAL",
+        help=(
+            "Poll until the job reaches a terminal state. Optional INTERVAL "
+            f"in seconds (default {_WATCH_DEFAULT_INTERVAL:g}s). "
+            "With --json, emits one NDJSON object per poll."
+        ),
+    )
     p_status.set_defaults(func=_cmd_status)
 
     p_arts = sub.add_parser("artifacts", help="List a job's output files.")

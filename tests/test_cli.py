@@ -251,6 +251,126 @@ def test_status_human_output(monkeypatch):
     assert "2 stages completed" in out
 
 
+def _status_body(state: str, stage: str = "render_shots") -> dict:
+    return {
+        "job_id": "J1",
+        "kind": "idea2video",
+        "state": state,
+        "submitted_at": "2026-05-19T00:00:00+00:00",
+        "updated_at": "2026-05-19T00:01:00+00:00",
+        "progress": {"current_stage": stage, "completed_stages": [stage]},
+        "final_video": None if state != "done" else "/tmp/J1/final.mp4",
+        "working_dir": "/tmp/J1",
+        "errors": []
+        if state != "failed"
+        else [{"stage": "pipeline", "message": "boom", "retriable": False, "at": "x"}],
+    }
+
+
+def test_status_watch_polls_until_done(monkeypatch):
+    sequence = iter(["running", "running", "done"])
+
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body(next(sequence)))
+
+    code, out, err = _run(
+        ["status", "J1", "--watch", "0.05"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    assert code == 0
+    # state changed from running -> done, so 2 distinct human-mode blocks
+    assert out.count("state:") >= 1
+    assert "done" in out
+
+
+def test_status_watch_failed_returns_exit_3(monkeypatch):
+    sequence = iter(["running", "failed"])
+
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body(next(sequence)))
+
+    code, out, err = _run(
+        ["status", "J1", "--watch", "0.05"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    assert code == cli_mod.EXIT_CLIENT_ERROR
+    assert "failed" in out
+
+
+def test_status_watch_cancelled_returns_exit_0(monkeypatch):
+    sequence = iter(["running", "cancelled"])
+
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body(next(sequence)))
+
+    code, _, _ = _run(
+        ["status", "J1", "--watch", "0.05"], monkeypatch=monkeypatch, handler=h
+    )
+    assert code == 0
+
+
+def test_status_watch_404_exits_immediately(monkeypatch):
+    calls = {"n": 0}
+
+    def h(req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(404, json={"error": "job NOPE not found"})
+
+    code, _, err = _run(
+        ["status", "NOPE", "--watch", "0.05"], monkeypatch=monkeypatch, handler=h
+    )
+    assert code == cli_mod.EXIT_NOT_FOUND
+    assert calls["n"] == 1  # didn't keep retrying
+
+
+def test_status_watch_json_emits_ndjson(monkeypatch):
+    sequence = iter(["queued", "running", "done"])
+
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body(next(sequence)))
+
+    code, out, err = _run(
+        ["--json", "status", "J1", "--watch", "0.05"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    assert code == 0
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(lines) == 3
+    for line in lines:
+        parsed = json.loads(line)
+        assert parsed["job_id"] == "J1"
+
+
+def test_status_watch_rejects_tiny_interval(monkeypatch):
+    code, _, err = _run(["status", "J1", "--watch", "0.001"])
+    assert code == cli_mod.EXIT_INPUT
+    assert "interval" in err
+
+
+def test_status_watch_default_interval(monkeypatch):
+    # `--watch` without value → defaults to 5s. Use a state that's already
+    # terminal so the test doesn't actually sleep.
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body("done"))
+
+    code, _, _ = _run(
+        ["status", "J1", "--watch"], monkeypatch=monkeypatch, handler=h
+    )
+    assert code == 0
+
+
+def test_status_without_watch_unchanged(monkeypatch):
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_status_body("running"))
+
+    code, out, err = _run(["status", "J1"], monkeypatch=monkeypatch, handler=h)
+    assert code == 0
+    assert "running" in out
+
+
 def test_artifacts_human_output(monkeypatch):
     def h(req: httpx.Request) -> httpx.Response:
         assert req.url.params.get("kind") == "final"
