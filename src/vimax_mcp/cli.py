@@ -417,11 +417,43 @@ def _cmd_submit_script(args) -> int:
 # Argparse wiring
 # ---------------------------------------------------------------------------
 
+def _build_common_globals() -> argparse.ArgumentParser:
+    """Globals (`--json` / `--server` / `--timeout`) reusable as subparser parents.
+
+    Subparser copies use `default=SUPPRESS` so that omitting the flag on the
+    subcommand does NOT overwrite the parent parser's value with the default.
+    Net effect: agents can write either `vimax --json health` or
+    `vimax health --json` and both work.
+    """
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--server",
+        default=argparse.SUPPRESS,
+        help=f"Daemon URL (default: {DEFAULT_SERVER}; env: VIMAX_SERVER)",
+    )
+    common.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Print structured JSON instead of human-readable output.",
+    )
+    common.add_argument(
+        "--timeout",
+        type=float,
+        default=argparse.SUPPRESS,
+        help=f"Request timeout seconds (default: {DEFAULT_TIMEOUT}; env: VIMAX_CLI_TIMEOUT)",
+    )
+    return common
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vimax",
         description="CLI for the vimax-mcp daemon. Talks REST to the local server.",
     )
+    # Parent-level globals carry the real defaults; subparsers reuse the same
+    # flags via parents=[common] with SUPPRESS defaults so flag position is
+    # free.
     parser.add_argument(
         "--server",
         default=DEFAULT_SERVER,
@@ -430,6 +462,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--json",
         action="store_true",
+        default=False,
         help="Print structured JSON instead of human-readable output.",
     )
     parser.add_argument(
@@ -439,15 +472,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Request timeout seconds (default: {DEFAULT_TIMEOUT}; env: VIMAX_CLI_TIMEOUT)",
     )
 
+    common = _build_common_globals()
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
-    p_health = sub.add_parser("health", help="Check the daemon is reachable.")
+    p_health = sub.add_parser("health", parents=[common], help="Check the daemon is reachable.")
     p_health.set_defaults(func=_cmd_health)
 
-    p_quota = sub.add_parser("quota", help="Show today's per-provider usage.")
+    p_quota = sub.add_parser("quota", parents=[common], help="Show today's per-provider usage.")
     p_quota.set_defaults(func=_cmd_quota)
 
-    p_list = sub.add_parser("list", help="List recent jobs (newest first).")
+    p_list = sub.add_parser("list", parents=[common], help="List recent jobs (newest first).")
     p_list.add_argument("--limit", type=int, default=20, help="Max jobs to return (1-500).")
     p_list.add_argument(
         "--kind",
@@ -463,7 +497,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_list.set_defaults(func=_cmd_list)
 
-    p_status = sub.add_parser("status", help="Get job state + progress.")
+    p_status = sub.add_parser("status", parents=[common], help="Get job state + progress.")
     p_status.add_argument("job_id")
     p_status.add_argument(
         "--watch",
@@ -480,7 +514,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_status.set_defaults(func=_cmd_status)
 
-    p_arts = sub.add_parser("artifacts", help="List a job's output files.")
+    p_arts = sub.add_parser("artifacts", parents=[common], help="List a job's output files.")
     p_arts.add_argument("job_id")
     p_arts.add_argument(
         "--kind",
@@ -489,11 +523,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_arts.set_defaults(func=_cmd_artifacts)
 
-    p_cancel = sub.add_parser("cancel", help="Cancel a running or queued job.")
+    p_cancel = sub.add_parser("cancel", parents=[common], help="Cancel a running or queued job.")
     p_cancel.add_argument("job_id")
     p_cancel.set_defaults(func=_cmd_cancel)
 
-    p_idea = sub.add_parser("submit-idea", help="Kick off an idea -> video job.")
+    p_idea = sub.add_parser("submit-idea", parents=[common], help="Kick off an idea -> video job.")
     p_idea.add_argument(
         "--idea",
         required=True,
@@ -505,7 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_idea.add_argument("--job-id", default=None, help="Reuse / resume an existing job_id.")
     p_idea.set_defaults(func=_cmd_submit_idea)
 
-    p_script = sub.add_parser("submit-script", help="Kick off a script -> video job.")
+    p_script = sub.add_parser("submit-script", parents=[common], help="Kick off a script -> video job.")
     p_script.add_argument(
         "--script",
         required=True,

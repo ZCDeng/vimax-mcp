@@ -509,6 +509,59 @@ def test_no_ansi_when_piped(monkeypatch):
     assert "\x1b[" not in out
 
 
+def test_json_flag_accepted_before_or_after_subcommand(monkeypatch):
+    """Globals must work in both positions so agents don't memorize order."""
+
+    def h(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"status": "ok", "version": "0.1.0", "started_at": "x", "pid": 1},
+        )
+
+    # parent-position (legacy)
+    code1, out1, _ = _run(["--json", "health"], monkeypatch=monkeypatch, handler=h)
+    # subcommand-position (the form agents naturally type)
+    code2, out2, _ = _run(["health", "--json"], monkeypatch=monkeypatch, handler=h)
+
+    assert code1 == 0 and code2 == 0
+    for out in (out1, out2):
+        parsed = json.loads(out)
+        assert parsed["status"] == "ok"
+
+
+def test_server_flag_accepted_before_or_after_subcommand(monkeypatch):
+    captured: list[str] = []
+
+    def h(req: httpx.Request) -> httpx.Response:
+        captured.append(str(req.url))
+        return httpx.Response(200, json={"status": "ok", "version": "x", "started_at": "x", "pid": 1})
+
+    _run(
+        ["--server", "http://parent.test:8080", "health"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    _run(
+        ["health", "--server", "http://child.test:8081"],
+        monkeypatch=monkeypatch,
+        handler=h,
+    )
+    assert "parent.test:8080" in captured[0]
+    assert "child.test:8081" in captured[1]
+
+
+def test_subcommand_flag_does_not_clobber_when_omitted(monkeypatch):
+    """Subcommand SUPPRESS default means omitting --json on the subparser
+    must not overwrite a parent-set --json value with False."""
+
+    def h(req):
+        return httpx.Response(200, json={"status": "ok", "version": "x", "started_at": "x", "pid": 1})
+
+    code, out, _ = _run(["--json", "health"], monkeypatch=monkeypatch, handler=h)
+    assert code == 0
+    json.loads(out)  # must be valid JSON, proves --json survived
+
+
 def test_server_flag_overrides_default(monkeypatch):
     captured = {}
 

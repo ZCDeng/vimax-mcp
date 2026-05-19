@@ -28,11 +28,13 @@ A single submit kicks off a job that runs for **10–40 minutes**. The CLI never
 | `vimax artifacts <job_id> [--kind final\|frames\|intermediate\|all]` | List output files with paths + sizes. The final mp4 has kind `final`. | 0 / 2 not_found |
 | `vimax cancel <job_id>` | Stop a queued or running job; the working_dir is preserved. | 0 / 2 not_found |
 
-Global flags (apply to every subcommand):
+Global flags (accepted in either position — before or after the subcommand):
 
 - `--json` — emit structured JSON instead of human text. **Always use this when parsing the output.**
 - `--server URL` — point at a non-default daemon (env: `VIMAX_SERVER`).
 - `--timeout SECONDS` — request timeout (env: `VIMAX_CLI_TIMEOUT`, default 30).
+
+Both `vimax --json status <id>` and `vimax status <id> --json` are valid.
 
 ## Exit codes
 
