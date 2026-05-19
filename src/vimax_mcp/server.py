@@ -24,6 +24,7 @@ from mcp.server.fastmcp import FastMCP
 from . import artifacts as artifacts_mod
 from .dotenv import maybe_load_vimax_env
 from .jobs import JobRegistry, default_jobs_root
+from .progress import infer_progress
 from .quota import (
     QuotaExhausted,
     QuotaTracker,
@@ -34,27 +35,6 @@ from .quota import (
 from .runner import run_job
 
 logger = logging.getLogger("vimax_mcp")
-
-_PROGRESS_STAGES = [
-    ("story.txt", "develop_story"),
-    ("characters.json", "extract_characters"),
-    ("character_portraits_registry.json", "generate_portraits"),
-    ("script.json", "write_script"),
-    ("scene_0/storyboard.json", "design_storyboard"),
-    ("scene_0/camera_tree.json", "construct_camera_tree"),
-    ("scene_0/final_video.mp4", "render_shots"),
-    ("final_video.mp4", "concat"),
-]
-
-
-def _infer_progress(working_dir: Path) -> dict:
-    current = "pending"
-    completed: list[str] = []
-    for rel, label in _PROGRESS_STAGES:
-        if (working_dir / rel).exists():
-            completed.append(label)
-            current = label
-    return {"current_stage": current, "completed_stages": completed}
 
 
 def _resolve_config_for_profile(profile: str, kind: str) -> Path:
@@ -201,7 +181,7 @@ async def get_job_status(job_id: str) -> dict:
         job = ctx.registry.get(job_id)
     except KeyError:
         return {"error": f"job {job_id} not found"}
-    progress = _infer_progress(Path(job.working_dir))
+    progress = infer_progress(Path(job.working_dir))
     return {
         "job_id": job.id,
         "kind": job.kind,
