@@ -182,6 +182,42 @@ class JobRegistry:
         os.replace(tmp, path)
         self._cache[job.id] = job
 
+    def list_jobs(
+        self,
+        limit: int = 20,
+        kind: Optional[str] = None,
+        state: Optional[str] = None,
+    ) -> list[Job]:
+        """Recent jobs, newest first.
+
+        Scans every meta.json under jobs_root (one disk read per job). For
+        single-user workloads this is fine — limit is on the order of dozens.
+        Cache is refreshed for every scanned entry so subsequent get() calls
+        don't hit disk twice.
+        """
+        out: list[Job] = []
+        if not self.root.is_dir():
+            return out
+        for child in sorted(self.root.iterdir()):
+            meta = child / "meta.json"
+            if not meta.is_file():
+                continue
+            try:
+                with meta.open() as f:
+                    job = Job.from_dict(json.load(f))
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                continue
+            if kind is not None and job.kind != kind:
+                continue
+            if state is not None and job.state != state:
+                continue
+            self._cache[job.id] = job
+            out.append(job)
+        out.sort(key=lambda j: j.submitted_at, reverse=True)
+        if limit > 0:
+            out = out[:limit]
+        return out
+
 
 def default_jobs_root() -> Path:
     env = os.environ.get("VIMAX_JOBS_DIR")

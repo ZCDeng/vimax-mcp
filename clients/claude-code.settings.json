@@ -1,0 +1,17 @@
+{
+  "//": [
+    "Merge into ~/.claude/settings.json (or the project-local .claude/settings.json).",
+    "This permission lets Claude Code invoke the `vimax` CLI without prompting.",
+    "It is the recommended way to wire vimax-mcp into an agent — REST + CLI is",
+    "the main supported path; MCP transport in clients/claude-code.mcp.json is",
+    "opt-in for clients that don't run shell commands.",
+    "",
+    "Prereq: ~/projects/vimax-mcp/scripts/install-cli.sh installed the wrapper",
+    "into ~/.local/bin/vimax (or wherever VIMAX_BIN_DIR points)."
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(vimax:*)"
+    ]
+  }
+}

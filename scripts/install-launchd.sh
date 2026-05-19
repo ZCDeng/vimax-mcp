@@ -65,11 +65,16 @@ cmd_install() {
   bootstrap_agent
   echo
   echo "tail -f $LOG_DIR/mcp.out.log $LOG_DIR/mcp.err.log to inspect"
-  echo "verify with: curl -sI http://127.0.0.1:7801/sse"
+  echo "verify REST:  curl -s http://127.0.0.1:7801/api/v1/health"
+  echo "verify CLI:   vimax health   (after ./scripts/install-cli.sh)"
+  echo "verify MCP:   curl -sI http://127.0.0.1:7801/mcp/sse | head -1"
 }
 
 cmd_status() {
   launchctl print "$GUI_TARGET/$LABEL" 2>&1 | sed -n '1,30p' || true
+  echo
+  echo "--- /api/v1/health ---"
+  curl -s --max-time 3 "http://127.0.0.1:7801/api/v1/health" || echo "(no response)"
   echo
   echo "--- mcp.out.log (tail) ---"
   tail -n 20 "$LOG_DIR/mcp.out.log" 2>/dev/null || echo "(no stdout log yet)"

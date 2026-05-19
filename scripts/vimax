@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Thin wrapper around `uv run --directory <vimax-mcp> python -m vimax_mcp.cli`.
+#
+# Why a wrapper instead of installing the entry point globally:
+#   * keeps the runtime tied to this repo's pinned uv.lock — no system pollution
+#   * 6 lines, zero packaging
+#   * symlinkable from ~/.local/bin/vimax (see scripts/install-cli.sh)
+#
+# Symlink resolution follows the link chain so the wrapper still finds its
+# own repo when invoked as e.g. ~/.local/bin/vimax.
+
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+exec uv run --directory "$REPO_DIR" python -m vimax_mcp.cli "$@"

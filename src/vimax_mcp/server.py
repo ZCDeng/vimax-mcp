@@ -24,6 +24,7 @@ from mcp.server.fastmcp import FastMCP
 from . import artifacts as artifacts_mod
 from .dotenv import maybe_load_vimax_env
 from .jobs import JobRegistry, default_jobs_root
+from .progress import infer_progress
 from .quota import (
     QuotaExhausted,
     QuotaTracker,
@@ -34,27 +35,6 @@ from .quota import (
 from .runner import run_job
 
 logger = logging.getLogger("vimax_mcp")
-
-_PROGRESS_STAGES = [
-    ("story.txt", "develop_story"),
-    ("characters.json", "extract_characters"),
-    ("character_portraits_registry.json", "generate_portraits"),
-    ("script.json", "write_script"),
-    ("scene_0/storyboard.json", "design_storyboard"),
-    ("scene_0/camera_tree.json", "construct_camera_tree"),
-    ("scene_0/final_video.mp4", "render_shots"),
-    ("final_video.mp4", "concat"),
-]
-
-
-def _infer_progress(working_dir: Path) -> dict:
-    current = "pending"
-    completed: list[str] = []
-    for rel, label in _PROGRESS_STAGES:
-        if (working_dir / rel).exists():
-            completed.append(label)
-            current = label
-    return {"current_stage": current, "completed_stages": completed}
 
 
 def _resolve_config_for_profile(profile: str, kind: str) -> Path:
@@ -201,7 +181,7 @@ async def get_job_status(job_id: str) -> dict:
         job = ctx.registry.get(job_id)
     except KeyError:
         return {"error": f"job {job_id} not found"}
-    progress = _infer_progress(Path(job.working_dir))
+    progress = infer_progress(Path(job.working_dir))
     return {
         "job_id": job.id,
         "kind": job.kind,
@@ -260,12 +240,34 @@ async def get_quota() -> dict:
     return snap.to_dict()
 
 
+def build_composite_app(*, enable_mcp: bool):
+    """Compose REST (/api/v1) + optionally MCP SSE (/mcp) under one Starlette parent.
+
+    Plan KD2: share a single ServerContext across both transports so quota /
+    job registry / runner state is consistent regardless of how a caller
+    arrives. MCP mount uses /mcp prefix — existing clients pointed at /sse
+    must migrate to /mcp/sse (see plan Risks + U5 docs).
+    """
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    from .rest import build_app as build_rest_app
+
+    ctx = _ctx_or_die()
+    routes = [Mount("/api/v1", app=build_rest_app(ctx))]
+    if enable_mcp:
+        routes.append(Mount("/mcp", app=mcp.sse_app()))
+    return Starlette(routes=routes)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="vimax-mcp")
     parser.add_argument(
         "--transport",
-        choices=("stdio", "sse"),
-        default=os.environ.get("VIMAX_MCP_TRANSPORT", "stdio"),
+        # `sse` is a deprecated alias for `both`, kept so the previous launchd
+        # plist (--transport sse) keeps working until U6 lands.
+        choices=("stdio", "http", "both", "sse"),
+        default=os.environ.get("VIMAX_MCP_TRANSPORT", "both"),
     )
     parser.add_argument("--host", default=os.environ.get("VIMAX_MCP_HOST", "127.0.0.1"))
     parser.add_argument(
@@ -275,8 +277,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    log_level = os.environ.get("VIMAX_MCP_LOG", "INFO")
     logging.basicConfig(
-        level=os.environ.get("VIMAX_MCP_LOG", "INFO"),
+        level=log_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     loaded = maybe_load_vimax_env()
@@ -284,14 +287,45 @@ def main() -> None:
         logger.info("loaded env from %s", loaded)
     _ctx_or_die()
 
-    if args.transport == "stdio":
+    transport = args.transport
+    if transport == "sse":
+        logger.warning(
+            "--transport sse is deprecated; use 'both' (REST + MCP SSE) "
+            "or 'http' (REST only). Treating as 'both'."
+        )
+        transport = "both"
+
+    if transport == "stdio":
+        # stdio mode keeps the original FastMCP behavior: no HTTP, no REST.
+        # Use this only when wired into an MCP client that spawns a subprocess.
+        logger.info("starting MCP stdio transport")
         mcp.run()
+        return
+
+    import uvicorn
+
+    enable_mcp = transport == "both"
+    app = build_composite_app(enable_mcp=enable_mcp)
+    if enable_mcp:
+        logger.info(
+            "starting composite server on http://%s:%d "
+            "(REST at /api/v1, MCP SSE at /mcp/sse)",
+            args.host,
+            args.port,
+        )
     else:
-        # FastMCP exposes host/port via the settings object before starting SSE.
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-        logger.info("starting SSE transport on http://%s:%d/sse", args.host, args.port)
-        mcp.run(transport="sse")
+        logger.info(
+            "starting REST-only server on http://%s:%d/api/v1",
+            args.host,
+            args.port,
+        )
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level=log_level.lower(),
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":
