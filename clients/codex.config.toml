@@ -20,4 +20,6 @@ args = [
   "python",
   "-m",
   "vimax_mcp.server",
+  "--transport",
+  "stdio",
 ]

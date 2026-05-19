@@ -17,7 +17,7 @@ from mcp.client.stdio import stdio_client
 async def test_list_tools_via_stdio():
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "vimax_mcp.server"],
+        args=["-m", "vimax_mcp.server", "--transport", "stdio"],
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -38,7 +38,7 @@ async def test_list_tools_via_stdio():
 async def test_get_status_missing_job_via_stdio():
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "vimax_mcp.server"],
+        args=["-m", "vimax_mcp.server", "--transport", "stdio"],
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -59,7 +59,7 @@ async def test_get_status_missing_job_via_stdio():
 async def test_get_quota_via_stdio():
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "vimax_mcp.server"],
+        args=["-m", "vimax_mcp.server", "--transport", "stdio"],
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
